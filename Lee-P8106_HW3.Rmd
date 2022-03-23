@@ -6,7 +6,74 @@ output: pdf_document
 ---
 
 Load packages
+
 ```{r, message=F}
 library(tidyverse)
+library(AppliedPredictiveModeling)
+library(caret)
+```
+
+Import and tidy data
+
+```{r}
+data = read_csv("auto.csv") %>% 
+  mutate(
+    year = factor(year),
+    origin = factor(origin),
+    mpg_cat = factor(mpg_cat)
+  )
+```
+
+Partition the data for model training
+
+```{r}
+set.seed(2022)
+
+# partition data into training and testing sets into randomized 4:1 splits
+train_index = createDataPartition(y = data$mpg_cat, p = 0.7, list = FALSE)
+train_data = data[train_index, ]
+test_data = data[-train_index, ]
+
+# matrices of predictors 
+train_pred = model.matrix(mpg_cat ~ ., train_data)[ ,-1]
+test_pred = model.matrix(mpg_cat ~ ., test_data)[ ,-1]
+
+# vectors of response
+train_resp = train_data$mpg_cat
+test_resp = test_data$mpg_cat
+```
+
+Calculate descriptive statistics: quantile data for the continuous variables and count data for the categorical variables.
+Number of cylinders is arguably an ordinal categorical variable but is treated as a continuous variable here. Most cars have an American origin (category 1), and the number of high and low mileage car samples are the same.
+
+```{r}
+summary(train_data)
+```
+
+Visualize data distribution. In general, cars with high mileage have lower weights, cylinder count, engine displacement in inches, and horsepower. Note the unequal distribution of car count when conditioned on their origin and mileage. 
+
+```{r}
+trellis.par.set(transparentTheme(trans = .4))
+
+featurePlot(train_pred[, 1:5], train_resp,
+            scales = list(x = list(relation = "free"), 
+                          y = list(relation = "free")),
+            plot = "density", pch = "|", 
+            auto.key = list(columns = 2))
+
+train_data %>% 
+  count(year, origin, mpg_cat) %>% 
+  ggplot(aes(x = year, y = n, fill = origin)) + 
+  geom_col() +
+  facet_grid(cols = vars(origin), rows = vars(mpg_cat)) +
+  labs(
+    title = "Car Distribution Across Year by Origin and Mileage",
+    x = "Year (19-)",
+    y = "Count"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "bottom"
+  )
 ```
 
