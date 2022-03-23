@@ -1,0 +1,12 @@
+---
+title: "P8106 HW3"
+author: "Brian Jo Hsuan Lee"
+date: "3/22/2022"
+output: pdf_document
+---
+
+Load packages
+```{r, message=F}
+library(tidyverse)
+```
+
