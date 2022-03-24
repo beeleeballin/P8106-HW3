@@ -43,8 +43,8 @@ test_data = data[-train_index, ]
 # matrices of predictors 
 train_pred = model.matrix(mpg_cat ~ ., train_data)[ ,-1]
 train_cont_pred = model.matrix(mpg_cat ~ ., train_data)[ , 2:6]
-# test_pred = model.matrix(mpg_cat ~ ., test_data)[ ,-1]
-# test_cont_pred = model.matrix(mpg_cat ~ ., train_data)[ , 2:6]
+test_pred = model.matrix(mpg_cat ~ ., test_data)[ ,-1]
+test_cont_pred = model.matrix(mpg_cat ~ ., test_data)[ , 2:6]
 
 # vectors of response
 train_resp = train_data$mpg_cat
@@ -186,8 +186,8 @@ qda_fit = train(x = train_cont_pred,
 ## e) 
 **Model Selection and justification**
 
-Compare ROC. Resamples() compares caret models, so we need to recreate a logit and an LDA model using the caret package 
-```{r, message=F}
+Compare ROC's of the 4 models. Resamples() compares caret models, so we need to recreate a logit and an LDA model using the caret package. The logit model has the highest average ROC, and it should be preferred to the other alternatives. 
+```{r, warning=F, message=F}
 set.seed(2022)
 
 logit_fit_caret = train(x = train_pred,
@@ -211,9 +211,57 @@ summary(train_res)
 bwplot(train_res, metric = "ROC")
 ```
 
+Plot the ROC curves and label the respective AUC's along them.
+
 ```{r, message=F}
+mars_pred_prob = predict(mars_fit, newdata = test_pred, type = "prob")[, 2]
+lda_pred_prob = predict(lda_fit_caret, newdata = test_cont_pred, type = "prob")[,2]
+qda_pred_prob = predict(qda_fit, newdata = test_cont_pred, type = "prob")[,2]
+
 logit_roc = roc(test_resp, logit_pred_prob)
-plot(logit_roc, legacy.axes = TRUE, print.auc = TRUE) 
-plot(smooth(logit_roc), col = 4, add = TRUE)
+mars_roc = roc(test_resp, mars_pred_prob)
+lda_roc = roc(test_resp, lda_pred_prob)
+qda_roc = roc(test_resp, qda_pred_prob)
+
+auc = c(logit_roc$auc[1], mars_roc$auc[1], lda_roc$auc[1], qda_roc$auc[1])
+model_names = c("logit", "mars", "lda", "qda")
+
+ggroc(list(logit_roc, mars_roc, lda_roc, qda_roc), legacy.axes = TRUE) + 
+  scale_color_discrete(labels = paste0(model_names, " (", round(auc,3),")"),
+                       name = "Models (AUC)") +
+  geom_abline(intercept = 0, slope = 1, color = "grey")
+```
+
+Misclassification error rate is defined as 1 - accuracy, or 1 - the overall fraction of correct predictions. Here are the values for each of the 4 models. Note that the QDA model has the lowest error rate if we set the classifier cut-off at 0.5, but because this is only at the particular threshold, we would still be better of selecting the logit model. 
+```{r, message=F}
+mars_pred = rep("low", length(mars_pred_prob))
+mars_pred[mars_pred_prob > 0.5] = "high"
+mars_cm = confusionMatrix(data = factor(mars_pred, levels = c("low", "high")),
+                                        reference = test_resp,
+                                        positive = "high")
+
+lda_pred = rep("low", length(lda_pred_prob))
+lda_pred[lda_pred_prob > 0.5] = "high"
+lda_cm = confusionMatrix(data = factor(lda_pred, levels = c("low", "high")),
+                                       reference = test_resp,
+                                       positive = "high")
+
+qda_pred = rep("low", length(qda_pred_prob))
+qda_pred[qda_pred_prob > 0.5] = "high"
+qda_cm = confusionMatrix(data = factor(qda_pred, levels = c("low", "high")),
+                                       reference = test_resp,
+                                       positive = "high")
+
+misclas_table = matrix(c(model_names,
+                         (1 - logit_cm$byClass[["Balanced Accuracy"]]), 
+                         (1 - mars_cm$byClass[["Balanced Accuracy"]]), 
+                         (1 - lda_cm$byClass[["Balanced Accuracy"]]), 
+                         (1 - qda_cm$byClass[["Balanced Accuracy"]])), 
+                       byrow = T,
+                       nrow = 2)
+
+kable(misclas_table[,], "simple")
+
+
 ```
 
