@@ -12,6 +12,8 @@ library(tidyverse)
 library(AppliedPredictiveModeling)
 library(pROC)
 library(caret)
+library(klaR)
+library(MASS)
 ```
 
 Import and tidy data
@@ -38,7 +40,9 @@ test_data = data[-train_index, ]
 
 # matrices of predictors 
 train_pred = model.matrix(mpg_cat ~ ., train_data)[ ,-1]
+train_cont_pred = model.matrix(mpg_cat ~ ., train_data)[ , 2:6]
 test_pred = model.matrix(mpg_cat ~ ., test_data)[ ,-1]
+test_cont_pred = model.matrix(mpg_cat ~ ., train_data)[ , 2:6]
 
 # vectors of response
 train_resp = train_data$mpg_cat
@@ -127,7 +131,27 @@ mars_fit$bestTune
 coef(mars_fit$finalModel) 
 ```
 
-Compare ROC. Resamples() compares caret models, so we need to recreate a logit model using the caret package 
+```{r}
+partimat(mpg_cat ~ cylinders + displacement + horsepower + weight + acceleration, 
+          method = "lda", data = train_data, nplots.vert = 2)
+```
+
+```{r}
+lda_fit = lda(mpg_cat ~ ., data = train_data[, -6:-7])
+plot(lda_fit)
+```
+
+```{r}
+set.seed(2022)
+
+qda_fit = train(x = train_cont_pred,
+                y = train_resp,
+                method = "qda",
+                metric = "ROC",
+                trControl = ctrl)
+```
+
+Compare ROC. Resamples() compares caret models, so we need to recreate a logit and an LDA model using the caret package 
 ```{r}
 set.seed(2022)
 
@@ -137,8 +161,16 @@ logit_fit_caret = train(x = train_pred,
                         metric = "ROC",
                         trControl = ctrl)
 
+lda_fit_caret = train(x = train_cont_pred,
+                      y = train_resp,
+                      method = "lda",
+                      metric = "ROC",
+                      trControl = ctrl)
+
 train_res = resamples(list(Logit = logit_fit_caret, 
-                           MARS = mars_fit))
+                           MARS = mars_fit,
+                           LDA = lda_fit_caret, 
+                           QDA = qda_fit))
 summary(train_res)
 
 bwplot(train_res, metric = "ROC")
